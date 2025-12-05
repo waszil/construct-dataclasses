@@ -20,6 +20,8 @@ import textwrap
 import enum
 import sys
 
+from types import GenericAlias
+
 import construct as cs
 
 __all__ = [
@@ -347,6 +349,17 @@ def _to_object_inner(value, field: dataclasses.Field):
 def _process_struct_dataclass(
     cls, bitwise=False, depth=None, reverse=False, union=False
 ):
+    # search for fields with no annotation, infer type from tfield
+    for member_name, member in cls.__dict__.items():
+        if isinstance(member, dataclasses.Field):
+            annotation = cls.__annotations__.get(member_name)
+            if annotation is None:
+                if "subcon_orig_type" in member.metadata:
+                    orig_type = member.metadata["subcon_orig_type"]
+                    new_annotation = GenericAlias(list, (orig_type,))
+                    cls.__annotations__[member_name] = new_annotation
+                else:
+                    raise ValueError(f"Cannot infer type annotation for field {member_name}!")
     new_cls = dataclasses.dataclass(cls)
     if hasattr(new_cls, "parser"):
         raise ValueError(
